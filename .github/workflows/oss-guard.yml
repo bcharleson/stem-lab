@@ -1,0 +1,17 @@
+name: oss-guard
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Block audio, secrets, and home paths
+        run: bash scripts/check-oss.sh
+      - name: Unit tests
+        run: |
+          python3 -m pip install pytest
+          PYTHONPATH=src python3 -m pytest -q

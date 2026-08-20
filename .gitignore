@@ -1,0 +1,43 @@
+# Virtualenv / packaging
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Secrets and local env
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# One-shot Demucs dumps (if someone runs extract without a session)
+output/
+
+# Local session library — source audio, stems, remixes, notes
+work/**
+!work/README.md
+
+# Belt-and-suspenders: never commit audio
+*.m4a
+*.mp3
+*.wav
+*.flac
+*.aiff
+*.aif
+*.ogg
+*.aac
+*.wma
+*.caf
+*.alac
