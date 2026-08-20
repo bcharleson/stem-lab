@@ -20,6 +20,11 @@ from stemlab.paths import (
     work_dir,
 )
 from stemlab.session import create_session, record_extract, require_source
+from stemlab.guitar import (
+    build_country_guitar,
+    mix_country_keep_vocal,
+    write_wav,
+)
 
 
 def _print(result: dict, as_json: bool) -> None:
@@ -177,6 +182,58 @@ def cmd_lib(_args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_accompany(args: argparse.Namespace) -> int:
+    import soundfile as sf
+
+    session = _resolve_session(args)
+    if session is None:
+        _print(
+            {"success": False, "error": "Pass a session directory or --artist and --title"},
+            args.json,
+        )
+        return 1
+
+    model = args.model or DEFAULT_MODEL[4]
+    stem_folder = session / "stems" / model
+    required = ("vocals", "drums", "bass", "other")
+    missing = [n for n in required if not (stem_folder / f"{n}.wav").is_file()]
+    if missing:
+        _print(
+            {
+                "success": False,
+                "error": f"Missing stems {missing} in {stem_folder}. Run extract first.",
+            },
+            args.json,
+        )
+        return 1
+
+    vocals, sr = sf.read(stem_folder / "vocals.wav", always_2d=True)
+    drums, _ = sf.read(stem_folder / "drums.wav", always_2d=True)
+    bass, _ = sf.read(stem_folder / "bass.wav", always_2d=True)
+    other, _ = sf.read(stem_folder / "other.wav", always_2d=True)
+    harmonic = 0.65 * bass + 1.0 * other
+
+    guitar, chords, tempo = build_country_guitar(harmonic, sr, drums)
+    guitar_path = write_wav(session / "stems" / "generated" / "acoustic_guitar.wav", guitar, sr)
+    mix = mix_country_keep_vocal(vocals, drums, bass, guitar, sr)
+    mix_name = args.out or (session / "remixes" / "country-acoustic.wav")
+    mix_path = write_wav(Path(mix_name), mix, sr)
+
+    compact = [{"start": round(a, 2), "end": round(b, 2), "chord": c} for a, b, c in chords]
+    result = {
+        "success": True,
+        "style": "country-acoustic",
+        "tempo": round(float(tempo), 2),
+        "vocal": "original",
+        "guitar": str(guitar_path),
+        "mix": str(mix_path),
+        "chords": compact[:40],
+        "chord_count": len(compact),
+    }
+    _print(result, args.json)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="stem-lab",
@@ -220,6 +277,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     lib = sub.add_parser("lib", help="Print the local work directory")
     lib.set_defaults(func=cmd_lib)
+
+    acc = sub.add_parser(
+        "accompany",
+        help="Replace distorted guitar with acoustic country, keep original vocal",
+    )
+    acc.add_argument("path", nargs="?", type=Path)
+    acc.add_argument("--artist")
+    acc.add_argument("--title")
+    acc.add_argument("-n", "--model")
+    acc.add_argument("-o", "--out", type=Path)
+    acc.add_argument("--json", action="store_true")
+    acc.set_defaults(func=cmd_accompany)
 
     return parser
 

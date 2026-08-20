@@ -1,4 +1,5 @@
 from stemlab.paths import slugify, safe_filename, STEM_SETS
+from stemlab.guitar import midi_to_hz, VOICINGS, KEY_CHORDS
 from stemlab.mix import select_stems
 from pathlib import Path
 
@@ -31,3 +32,11 @@ def test_select_stems_mute_and_solo(tmp_path: Path):
     assert [p.stem for p in muted] == ["drums", "bass", "other"]
     solo = select_stems(available, solo=["vocals", "drums"])
     assert [p.stem for p in solo] == ["vocals", "drums"]
+
+
+def test_guitar_voicings_and_tuning():
+    assert abs(midi_to_hz(69) - 440.0) < 1e-6
+    assert abs(midi_to_hz(57) - 220.0) < 1e-6
+    for name in KEY_CHORDS["G"]:
+        assert name in VOICINGS
+        assert len(VOICINGS[name]) >= 4
