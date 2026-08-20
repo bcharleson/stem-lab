@@ -28,7 +28,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
-accompany = ["librosa>=0.10"]
+accompany = ["librosa>=0.10", "pretty_midi>=0.2.10"]
 
 [project.scripts]
 stem-lab = "stemlab.cli:main"

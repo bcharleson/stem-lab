@@ -67,7 +67,7 @@ stem-lab mix --artist example-artist --title demo-song --solo drums bass -o drum
 
 ## Acoustic country (keep the original vocal)
 
-Requires `librosa` (`pip install librosa` in the venv). Detects chords from bass + `other`, renders a time-locked acoustic guitar, and mixes it under the original vocal. Drums and bass stay; the original guitar/`other` stem is left out.
+Requires `librosa`, `pretty_midi`, and [FluidSynth](https://www.fluidsynth.org/) (`brew install fluid-synth`) plus a GM soundfont in `.cache/` (gitignored). Country mixes **balance the Demucs stems to target LUFS**, replace guitar with a sampled steel acoustic, and run an EQ/comp/reverb/limiter chain. The original vocal stays.
 
 ```bash
 stem-lab accompany --artist example-artist --title demo-song --style country-acoustic

@@ -22,8 +22,17 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
+# Local caches (soundfonts, etc.)
+.cache/
+
 # One-shot Demucs dumps (if someone runs extract without a session)
 output/
+
+# Rendered MIDI / soundfonts
+*.mid
+*.sf2
+*.sf3
+*.sfz
 
 # Local session library — source audio, stems, remixes, notes
 work/**

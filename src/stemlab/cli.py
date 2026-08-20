@@ -21,6 +21,7 @@ from stemlab.paths import (
 )
 from stemlab.session import create_session, record_extract, require_source
 from stemlab.guitar import build_accompaniment, mix_keep_vocal, write_wav
+from stemlab.produce import ProduceError, produce_country
 
 
 def _print(result: dict, as_json: bool) -> None:
@@ -207,14 +208,24 @@ def cmd_accompany(args: argparse.Namespace) -> int:
     drums, _ = sf.read(stem_folder / "drums.wav", always_2d=True)
     bass, _ = sf.read(stem_folder / "bass.wav", always_2d=True)
     other, _ = sf.read(stem_folder / "other.wav", always_2d=True)
-    harmonic = 0.65 * bass + 1.0 * other
     style = args.style
+    if style == "country-acoustic":
+        try:
+            result = produce_country(session, model=model)
+        except ProduceError as exc:
+            _print({"success": False, "error": str(exc)}, args.json)
+            return 1
+        if args.out:
+            Path(result["mix"]).replace(args.out)
+            result["mix"] = str(args.out)
+        _print(result, args.json)
+        return 0
+
+    harmonic = 0.65 * bass + 1.0 * other
     guitar, chords, tempo = build_accompaniment(style, harmonic, sr, drums)
-    guitar_name = "reggae_skank_guitar.wav" if style == "dirty-heads" else "acoustic_guitar.wav"
-    mix_default = "dirty-heads.wav" if style == "dirty-heads" else "country-acoustic.wav"
-    guitar_path = write_wav(session / "stems" / "generated" / guitar_name, guitar, sr)
+    guitar_path = write_wav(session / "stems" / "generated" / "reggae_skank_guitar.wav", guitar, sr)
     mix = mix_keep_vocal(style, vocals, drums, bass, guitar, sr, tempo)
-    mix_name = args.out or (session / "remixes" / mix_default)
+    mix_name = args.out or (session / "remixes" / "dirty-heads.wav")
     mix_path = write_wav(Path(mix_name), mix, sr)
 
     compact = [{"start": round(a, 2), "end": round(b, 2), "chord": c} for a, b, c in chords]
