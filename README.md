@@ -70,9 +70,11 @@ stem-lab mix --artist example-artist --title demo-song --solo drums bass -o drum
 Requires `librosa` (`pip install librosa` in the venv). Detects chords from bass + `other`, renders a time-locked acoustic guitar, and mixes it under the original vocal. Drums and bass stay; the original guitar/`other` stem is left out.
 
 ```bash
-stem-lab accompany --artist example-artist --title demo-song
-# → work/<artist>/<song>/remixes/country-acoustic.wav
-# → work/<artist>/<song>/stems/generated/acoustic_guitar.wav
+stem-lab accompany --artist example-artist --title demo-song --style country-acoustic
+# → remixes/country-acoustic.wav
+
+stem-lab accompany --artist example-artist --title demo-song --style dirty-heads
+# → remixes/dirty-heads.wav  (offbeat reggae skank, bass-forward, original vocal)
 ```
 
 ## Library

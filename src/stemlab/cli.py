@@ -20,11 +20,7 @@ from stemlab.paths import (
     work_dir,
 )
 from stemlab.session import create_session, record_extract, require_source
-from stemlab.guitar import (
-    build_country_guitar,
-    mix_country_keep_vocal,
-    write_wav,
-)
+from stemlab.guitar import build_accompaniment, mix_keep_vocal, write_wav
 
 
 def _print(result: dict, as_json: bool) -> None:
@@ -212,17 +208,19 @@ def cmd_accompany(args: argparse.Namespace) -> int:
     bass, _ = sf.read(stem_folder / "bass.wav", always_2d=True)
     other, _ = sf.read(stem_folder / "other.wav", always_2d=True)
     harmonic = 0.65 * bass + 1.0 * other
-
-    guitar, chords, tempo = build_country_guitar(harmonic, sr, drums)
-    guitar_path = write_wav(session / "stems" / "generated" / "acoustic_guitar.wav", guitar, sr)
-    mix = mix_country_keep_vocal(vocals, drums, bass, guitar, sr)
-    mix_name = args.out or (session / "remixes" / "country-acoustic.wav")
+    style = args.style
+    guitar, chords, tempo = build_accompaniment(style, harmonic, sr, drums)
+    guitar_name = "reggae_skank_guitar.wav" if style == "dirty-heads" else "acoustic_guitar.wav"
+    mix_default = "dirty-heads.wav" if style == "dirty-heads" else "country-acoustic.wav"
+    guitar_path = write_wav(session / "stems" / "generated" / guitar_name, guitar, sr)
+    mix = mix_keep_vocal(style, vocals, drums, bass, guitar, sr, tempo)
+    mix_name = args.out or (session / "remixes" / mix_default)
     mix_path = write_wav(Path(mix_name), mix, sr)
 
     compact = [{"start": round(a, 2), "end": round(b, 2), "chord": c} for a, b, c in chords]
     result = {
         "success": True,
-        "style": "country-acoustic",
+        "style": style,
         "tempo": round(float(tempo), 2),
         "vocal": "original",
         "guitar": str(guitar_path),
@@ -280,11 +278,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     acc = sub.add_parser(
         "accompany",
-        help="Replace distorted guitar with acoustic country, keep original vocal",
+        help="Replace guitar with a new style and keep the original vocal",
     )
     acc.add_argument("path", nargs="?", type=Path)
     acc.add_argument("--artist")
     acc.add_argument("--title")
+    acc.add_argument(
+        "--style",
+        choices=("country-acoustic", "dirty-heads"),
+        default="country-acoustic",
+        help="country boom-chuck or California reggae skank (Dirty Heads)",
+    )
     acc.add_argument("-n", "--model")
     acc.add_argument("-o", "--out", type=Path)
     acc.add_argument("--json", action="store_true")

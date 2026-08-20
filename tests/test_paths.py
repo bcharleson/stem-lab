@@ -1,7 +1,10 @@
-from stemlab.paths import slugify, safe_filename, STEM_SETS
-from stemlab.guitar import midi_to_hz, VOICINGS, KEY_CHORDS
-from stemlab.mix import select_stems
 from pathlib import Path
+
+import numpy as np
+
+from stemlab.guitar import KEY_CHORDS, VOICINGS, midi_to_hz, render_reggae_skank
+from stemlab.mix import select_stems
+from stemlab.paths import STEM_SETS, safe_filename, slugify
 
 
 def test_slugify_artist_and_title():
@@ -40,3 +43,13 @@ def test_guitar_voicings_and_tuning():
     for name in KEY_CHORDS["G"]:
         assert name in VOICINGS
         assert len(VOICINGS[name]) >= 4
+
+
+def test_reggae_skank_is_stereo_and_bounded():
+    sr = 8000
+    n = sr * 2
+    chords = [(0.0, 2.0, "G")]
+    beats = np.array([0.0, 0.5, 1.0, 1.5], dtype=float)
+    out = render_reggae_skank(n, sr, chords, beats)
+    assert out.shape == (n, 2)
+    assert np.max(np.abs(out)) <= 0.66

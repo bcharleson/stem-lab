@@ -179,11 +179,121 @@ def render_country_acoustic(
     return stereo
 
 
-def build_country_guitar(harmonic: np.ndarray, sr: int, beat_source: np.ndarray) -> tuple[np.ndarray, list[tuple[float, float, str]], float]:
+def _chord_at(chords: list[tuple[float, float, str]], t: float) -> str:
+    for t0, t1, name in chords:
+        if t0 <= t < t1:
+            return name
+    return chords[-1][2] if chords else "G"
+
+
+def _mute_envelope(pluck: np.ndarray, sr: int, ms: float = 75.0) -> np.ndarray:
+    n = max(8, int(sr * ms / 1000.0))
+    n = min(n, pluck.shape[0])
+    env = np.zeros(pluck.shape[0], dtype=np.float32)
+    env[:n] = np.linspace(1.0, 0.0, n, dtype=np.float32)
+    return pluck * env
+
+
+def render_reggae_skank(
+    n_samples: int,
+    sr: int,
+    chords: list[tuple[float, float, str]],
+    beat_times: np.ndarray,
+) -> np.ndarray:
+    """Dirty Heads / California reggae: muted offbeat guitar skanks."""
+    rng = np.random.default_rng(11)
+    bank = _pluck_bank(sr)
+    left = np.zeros(n_samples, dtype=np.float32)
+    right = np.zeros(n_samples, dtype=np.float32)
+    beats = np.concatenate([beat_times, [n_samples / sr]])
+    width = int(0.006 * sr)
+
+    # Offbeat ("and") of each quarter — the reggae upstroke.
+    offbeats = 0.5 * (beats[:-1] + beats[1:])
+    for i, t in enumerate(offbeats):
+        name = _chord_at(chords, float(t))
+        voicing = VOICINGS[name]
+        notes = voicing[-3:] if len(voicing) >= 3 else voicing
+        at = int(float(t) * sr)
+        for j, midi in enumerate(notes):
+            pluck = _mute_envelope(bank[midi], sr, ms=68.0)
+            jitter = int(rng.integers(0, 80))
+            stagger = int(j * 0.003 * sr)
+            g = 0.20 + 0.04 * j
+            _add(left, pluck, at + jitter + stagger, g)
+            _add(right, pluck, at + jitter + stagger + width, g * 0.92)
+
+    # Light downbeat pad on bar 1 so changes read, still guitar-not-strum-country.
+    for i, t in enumerate(beats[:-1]):
+        if i % 4 != 0:
+            continue
+        name = _chord_at(chords, float(t))
+        at = int(float(t) * sr)
+        for j, midi in enumerate(VOICINGS[name][-2:]):
+            pluck = _mute_envelope(bank[midi], sr, ms=110.0)
+            _add(left, pluck, at + int(j * 0.004 * sr), 0.06)
+            _add(right, pluck, at + width, 0.05)
+
+    stereo = np.stack([left, right], axis=1)
+    peak = np.max(np.abs(stereo)) + 1e-9
+    return stereo * (0.65 / peak)
+
+
+def _echo(audio: np.ndarray, delay_samples: int, mix: float) -> np.ndarray:
+    if delay_samples <= 0 or delay_samples >= audio.shape[0]:
+        return audio
+    wet = np.zeros_like(audio)
+    wet[delay_samples:] = audio[:-delay_samples] * mix
+    return audio + wet
+
+
+def build_accompaniment(
+    style: str,
+    harmonic: np.ndarray,
+    sr: int,
+    beat_source: np.ndarray,
+) -> tuple[np.ndarray, list[tuple[float, float, str]], float]:
     tempo, beats = beat_times_from_audio(beat_source, sr)
     chords = detect_chords(harmonic, sr, beats, beats_per_chord=2)
-    guitar = render_country_acoustic(harmonic.shape[0], sr, chords, beats)
+    n = harmonic.shape[0]
+    if style == "dirty-heads":
+        guitar = render_reggae_skank(n, sr, chords, beats)
+    else:
+        guitar = render_country_acoustic(n, sr, chords, beats)
     return guitar, chords, tempo
+
+
+def mix_keep_vocal(
+    style: str,
+    vocals: np.ndarray,
+    drums: np.ndarray,
+    bass: np.ndarray,
+    guitar: np.ndarray,
+    sr: int,
+    tempo: float,
+) -> np.ndarray:
+    n = min(vocals.shape[0], drums.shape[0], bass.shape[0], guitar.shape[0])
+    v = vocals[:n].astype(np.float32)
+    d = drums[:n].astype(np.float32)
+    b = bass[:n].astype(np.float32)
+    g = guitar[:n].astype(np.float32)
+    eighth = int((60.0 / max(tempo, 1.0)) * 0.5 * sr)
+
+    if style == "dirty-heads":
+        # 8th-note dub space; bass-forward California reggae-rock.
+        v = _echo(v, eighth, 0.20)
+        g = _echo(g, eighth, 0.30)
+        mix = v * 1.16 + d * 0.50 + b * 0.50 + g * 1.35
+    else:
+        v = _echo(v, int(0.095 * sr), 0.22)
+        mix = v * 1.18 + d * 0.58 + b * 0.28 + g * 1.40
+
+    peak = np.max(np.abs(mix)) + 1e-9
+    return mix * (0.89 / peak)
+
+
+def build_country_guitar(harmonic: np.ndarray, sr: int, beat_source: np.ndarray) -> tuple[np.ndarray, list[tuple[float, float, str]], float]:
+    return build_accompaniment("country-acoustic", harmonic, sr, beat_source)
 
 
 def mix_country_keep_vocal(
@@ -192,24 +302,9 @@ def mix_country_keep_vocal(
     bass: np.ndarray,
     guitar: np.ndarray,
     sr: int,
+    tempo: float = 86.13,
 ) -> np.ndarray:
-    """Keep the original vocal; sit a country band under it."""
-    n = min(vocals.shape[0], drums.shape[0], bass.shape[0], guitar.shape[0])
-    v = vocals[:n].astype(np.float32)
-    d = drums[:n].astype(np.float32)
-    b = bass[:n].astype(np.float32)
-    g = guitar[:n].astype(np.float32)
-
-    # ~95 ms country slapback on the vocal, one repeat
-    delay = int(0.095 * sr)
-    slap = np.zeros_like(v)
-    slap[delay:] = v[:-delay] * 0.22
-    v = v + slap
-
-    mix = v * 1.18 + d * 0.58 + b * 0.28 + g * 1.40
-    peak = np.max(np.abs(mix)) + 1e-9
-    mix = mix * (0.89 / peak)
-    return mix
+    return mix_keep_vocal("country-acoustic", vocals, drums, bass, guitar, sr, tempo)
 
 
 def write_wav(path: Path, audio: np.ndarray, sr: int) -> Path:
